@@ -6,6 +6,7 @@ export interface CoinPackage {
 }
 
 export interface CardDetails {
+  id: string;
   cardNumber: string;
   cardName: string;
   expiry: string;

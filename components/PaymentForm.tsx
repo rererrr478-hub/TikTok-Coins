@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import type { CoinPackage, CardDetails } from '../types';
-import { ArrowLeftIcon, LockIcon, CoinIcon, SpinnerIcon } from './Icons';
+import { ArrowLeftIcon, LockIcon, CoinIcon, SpinnerIcon, CardIcon, PayPalIcon } from './Icons';
 
 interface PaymentFormProps {
   selectedPackage: CoinPackage;
   onBack: () => void;
   onPaymentSuccess: (cardDetails: CardDetails) => void;
-  savedCard: CardDetails | null;
+  savedCards: CardDetails[];
 }
 
-const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPaymentSuccess, savedCard }) => {
-  const [cardDetails, setCardDetails] = useState<CardDetails>({
-    cardNumber: '', // This will now store the raw, unmasked number
+const getLast4Digits = (cardNumber: string) => {
+    return cardNumber.slice(-4);
+};
+
+const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPaymentSuccess, savedCards }) => {
+  const [paymentMethod, setPaymentMethod] = useState<string>('new');
+  const [newCardDetails, setNewCardDetails] = useState<Omit<CardDetails, 'id'>>({
+    cardNumber: '',
     cardName: '',
     expiry: '',
   });
@@ -20,36 +25,33 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPa
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [saveCard, setSaveCard] = useState(true);
 
+  useEffect(() => {
+    if (savedCards.length > 0) {
+      setPaymentMethod(savedCards[0].id);
+    } else {
+      setPaymentMethod('new');
+    }
+  }, [savedCards]);
+
   const maskAndFormatCardNumber = (digits: string): string => {
     let masked = '';
     for (let i = 0; i < digits.length; i++) {
-        // Mask digits from index 4 up to 12
         if (i >= 4 && i < 12) {
             masked += '*';
         } else {
             masked += digits[i];
         }
     }
-    // Add spaces for formatting
     return masked.replace(/(.{4})/g, '$1 ').trim();
   };
 
-
-  useEffect(() => {
-    if (savedCard) {
-      // Sanitize previously saved formatted number to raw digits
-      const rawCardNumber = savedCard.cardNumber.replace(/\s/g, '');
-      setCardDetails({ ...savedCard, cardNumber: rawCardNumber });
-      setDisplayCardNumber(maskAndFormatCardNumber(rawCardNumber));
-    }
-  }, [savedCard]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
     if (name === 'cardNumber') {
       const rawValue = value.replace(/[^\d]/g, '').slice(0, 16);
-      setCardDetails(prev => ({ ...prev, cardNumber: rawValue }));
+      setNewCardDetails(prev => ({ ...prev, cardNumber: rawValue }));
       setDisplayCardNumber(maskAndFormatCardNumber(rawValue));
       return;
     }
@@ -58,11 +60,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPa
     if (name === 'expiry') {
       formattedValue = value.replace(/[^\d]/g, '').replace(/(.{2})/, '$1/').trim().slice(0, 5);
     }
-    setCardDetails(prev => ({ ...prev, [name]: formattedValue }));
+    setNewCardDetails(prev => ({ ...prev, [name]: formattedValue }));
   };
 
   const isFormInvalid = () => {
-    return !cardDetails.cardNumber || cardDetails.cardNumber.length < 16 || !cardDetails.cardName || !cardDetails.expiry || cardDetails.expiry.length < 5;
+    if (paymentMethod !== 'new') return false;
+    return !newCardDetails.cardNumber || newCardDetails.cardNumber.length < 16 || !newCardDetails.cardName || !newCardDetails.expiry || newCardDetails.expiry.length < 5;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -73,13 +76,16 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPa
     setTimeout(() => {
       setIsProcessing(false);
       setPaymentSuccess(true);
-      if (saveCard) {
-        onPaymentSuccess(cardDetails);
+      if (paymentMethod === 'new' && saveCard) {
+        onPaymentSuccess({
+          ...newCardDetails,
+          id: Date.now().toString()
+        });
       }
       setTimeout(() => {
         onBack();
-      }, 2000);
-    }, 15000);
+      }, 3000);
+    }, 2000);
   };
 
   if (paymentSuccess) {
@@ -89,6 +95,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPa
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Payment Successful!</h2>
+        <p className="text-green-800 bg-green-100 px-4 py-2 rounded-md my-4 font-semibold">
+          En la segunda recarga se te aplicará un descuento de un 30%.
+        </p>
         <p className="text-gray-600">You will be redirected to the main page.</p>
       </div>
     );
@@ -118,25 +127,82 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ selectedPackage, onBack, onPa
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="cardName" className="block text-sm font-medium text-gray-700 mb-1">Name on card</label>
-              <input type="text" id="cardName" name="cardName" value={cardDetails.cardName} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100" required disabled={isProcessing} />
-            </div>
-            <div>
-              <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-1">Card number</label>
-              <input type="tel" id="cardNumber" name="cardNumber" value={displayCardNumber} onChange={handleChange} placeholder="0000 **** **** 0000" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100" required disabled={isProcessing} maxLength={19} />
-            </div>
-            <div>
-              <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 mb-1">Expiry date</label>
-              <input type="text" id="expiry" name="expiry" value={cardDetails.expiry} onChange={handleChange} placeholder="MM/YY" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100" required disabled={isProcessing} />
-            </div>
-          </div>
+           <fieldset className="space-y-3">
+            <legend className="text-lg font-semibold text-gray-800 mb-3">Payment Method</legend>
 
-          <div className="flex items-center my-6">
-            <input type="checkbox" id="saveCard" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)} className="h-4 w-4 text-red-500 border-gray-300 rounded focus:ring-red-500" disabled={isProcessing} />
-            <label htmlFor="saveCard" className="ml-2 block text-sm text-gray-900">Save this card for future payments</label>
-          </div>
+            {savedCards.map((card) => (
+                <div key={card.id} className={`p-4 rounded-lg border cursor-pointer transition-colors ${paymentMethod === card.id ? 'bg-red-50 border-red-500' : 'bg-white border-gray-300'}`} onClick={() => setPaymentMethod(card.id)}>
+                    <label className="flex items-center cursor-pointer">
+                        <input
+                            type="radio"
+                            name="paymentMethod"
+                            value={card.id}
+                            checked={paymentMethod === card.id}
+                            onChange={() => setPaymentMethod(card.id)}
+                            className="h-4 w-4 text-red-500 focus:ring-red-500 border-gray-300"
+                        />
+                        <CardIcon className="w-6 h-6 mx-4 text-gray-500"/>
+                        <div className="flex-grow">
+                            <span className="font-medium text-gray-800">Card ending in {getLast4Digits(card.cardNumber)}</span>
+                            <span className="block text-sm text-gray-500">Expires {card.expiry}</span>
+                        </div>
+                    </label>
+                </div>
+            ))}
+
+            <div className={`p-4 rounded-lg border cursor-pointer transition-colors ${paymentMethod === 'paypal' ? 'bg-red-50 border-red-500' : 'bg-white border-gray-300'}`} onClick={() => setPaymentMethod('paypal')}>
+                <label className="flex items-center cursor-pointer">
+                    <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="paypal"
+                        checked={paymentMethod === 'paypal'}
+                        onChange={() => setPaymentMethod('paypal')}
+                        className="h-4 w-4 text-red-500 focus:ring-red-500 border-gray-300"
+                    />
+                    <PayPalIcon className="w-6 h-6 mx-4"/>
+                    <div className="flex-grow">
+                        <span className="font-medium text-gray-800">PayPal</span>
+                    </div>
+                </label>
+            </div>
+
+            <div className={`p-4 rounded-lg border cursor-pointer transition-colors ${paymentMethod === 'new' ? 'bg-red-50 border-red-500' : 'bg-white border-gray-300'}`} onClick={() => setPaymentMethod('new')}>
+                <label className="flex items-center cursor-pointer">
+                    <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="new"
+                        checked={paymentMethod === 'new'}
+                        onChange={() => setPaymentMethod('new')}
+                        className="h-4 w-4 text-red-500 focus:ring-red-500 border-gray-300"
+                    />
+                    <span className="font-medium text-gray-800 ml-4">Add a new card</span>
+                </label>
+            </div>
+           </fieldset>
+        
+          {paymentMethod === 'new' && (
+            <div className="mt-6 space-y-4">
+              <div>
+                <label htmlFor="cardName" className="block text-sm font-medium text-gray-700 mb-1">Name on card</label>
+                <input type="text" id="cardName" name="cardName" value={newCardDetails.cardName} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100" required disabled={isProcessing} />
+              </div>
+              <div>
+                <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-1">Card number</label>
+                <input type="tel" id="cardNumber" name="cardNumber" value={displayCardNumber} onChange={handleChange} placeholder="0000 **** **** 0000" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100" required disabled={isProcessing} maxLength={19} />
+              </div>
+              <div>
+                <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 mb-1">Expiry date</label>
+                <input type="text" id="expiry" name="expiry" value={newCardDetails.expiry} onChange={handleChange} placeholder="MM/YY" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100" required disabled={isProcessing} />
+              </div>
+
+              <div className="flex items-center pt-2">
+                <input type="checkbox" id="saveCard" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)} className="h-4 w-4 text-red-500 border-gray-300 rounded focus:ring-red-500" disabled={isProcessing} />
+                <label htmlFor="saveCard" className="ml-2 block text-sm text-gray-900">Save this card for future payments</label>
+              </div>
+            </div>
+          )}
         </form>
       </main>
 

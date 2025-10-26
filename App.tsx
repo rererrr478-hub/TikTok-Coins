@@ -23,7 +23,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [view, setView] = useState<'main' | 'payment' | 'customAmount'>('main');
   const [selectedPackageId, setSelectedPackageId] = useState<number>(COIN_PACKAGES[0].id);
-  const [savedCard, setSavedCard] = useState<CardDetails | null>(null);
+  const [savedCards, setSavedCards] = useState<CardDetails[]>([]);
   const [customPackage, setCustomPackage] = useState<CoinPackage | null>(null);
 
   const selectedPackageFromList = COIN_PACKAGES.find(p => p.id === selectedPackageId) || COIN_PACKAGES[0];
@@ -48,7 +48,13 @@ const App: React.FC = () => {
   };
 
   const handlePaymentSuccess = (cardDetails: CardDetails) => {
-    setSavedCard(cardDetails);
+    setSavedCards(prev => {
+        const cardExists = prev.some(card => card.cardNumber === cardDetails.cardNumber);
+        if (!cardExists) {
+            return [...prev, cardDetails];
+        }
+        return prev;
+    });
   };
 
   const handleCustomAmountContinue = (amount: number) => {
@@ -70,7 +76,7 @@ const App: React.FC = () => {
             selectedPackage={packageForPayment}
             onBack={handleGoBack}
             onPaymentSuccess={handlePaymentSuccess}
-            savedCard={savedCard}
+            savedCards={savedCards}
           />
         );
       case 'customAmount':
