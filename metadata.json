@@ -1,0 +1,5 @@
+{
+  "name": "TikTok Coins",
+  "description": "A web application that replicates a coin purchasing interface, allowing users to select from various coin packages and proceed to a simulated checkout.",
+  "requestFramePermissions": []
+}
